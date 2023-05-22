@@ -55,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
         runnable = new Runnable() {
             @Override
             public void run() {
+                binding.loadingSpinner.setVisibility(View.VISIBLE);
                 getLastEarthquakes();
                 handler.postDelayed(this, 60000);
             }
@@ -111,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
 
             this.earthquakes = earthquakes;
             Toast.makeText(this, "Son depremler güncellendi!", Toast.LENGTH_SHORT).show();
+            binding.loadingSpinner.setVisibility(View.GONE);
         }, ContextCompat.getMainExecutor(this));
     }
 }
