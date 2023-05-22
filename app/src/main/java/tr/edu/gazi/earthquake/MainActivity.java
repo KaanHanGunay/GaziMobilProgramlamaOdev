@@ -3,6 +3,7 @@ package tr.edu.gazi.earthquake;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.View;
 import android.widget.Toast;
 
@@ -21,16 +22,21 @@ import org.osmdroid.views.overlay.Marker;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import tr.edu.gazi.earthquake.databinding.ActivityMainBinding;
 import tr.edu.gazi.earthquake.models.Earthquake;
+import tr.edu.gazi.earthquake.service.EarthquakeService;
 
 public class MainActivity extends AppCompatActivity {
     ActivityMainBinding binding;
-    private ArrayList<Earthquake> earthquakes;
+    private List<Earthquake> earthquakes;
     private MapView map;
     private SharedPreferences sharedPreferences;
+    private EarthquakeService earthquakeService;
+    private Handler handler;
+    private Runnable runnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +50,17 @@ public class MainActivity extends AppCompatActivity {
         map.setTileSource(TileSourceFactory.MAPNIK);
         map.getController().setZoom(6.5);
         map.getController().setCenter(new GeoPoint(39.0570, 34.4641));
-        getLastEarthquakes();
+        earthquakeService = new EarthquakeService();
+        handler = new Handler();
+        runnable = new Runnable() {
+            @Override
+            public void run() {
+                getLastEarthquakes();
+                handler.postDelayed(this, 60000);
+            }
+        };
+
+        handler.post(runnable);
     }
 
     @Override
@@ -61,37 +77,25 @@ public class MainActivity extends AppCompatActivity {
 
     public void getLastEarthquakes() {
         CompletableFuture.supplyAsync(() -> {
-            ArrayList<Earthquake> earthquakes = new ArrayList<>();
-
+            List<Earthquake> earthquakes = new ArrayList<>();
             try {
-                Document doc = Jsoup.connect("https://kandillirasathanesi.com/index.php").get();
-                Elements rows = doc.select("table > tbody > tr");
-                int maxRowNum = Math.min(rows.size(), 20);
-
-                for (int i = 0; i < maxRowNum; i++) {
-                    Earthquake earthquake = new Earthquake();
-                    earthquake.setLocation(rows.get(i).select("td:eq(0)").text());
-                    earthquake.setMagnitude(Double.parseDouble(rows.get(i).select("td:eq(1)").text()));
-                    earthquake.setDepth(Double.parseDouble(rows.get(i).select("td:eq(2)").text()));
-                    earthquake.setLatitude(Double.parseDouble(rows.get(i).select("td:eq(3)").text()));
-                    earthquake.setLongitude(Double.parseDouble(rows.get(i).select("td:eq(4)").text()));
-                    earthquake.setDate(rows.get(i).select("td:eq(5)").text());
-                    earthquakes.add(earthquake);
-                }
+                return earthquakeService.getLastEarthquakes();
             } catch (IOException e) {
-                Toast.makeText(this, "Son depremler alınırken hata ile karşılaşıldı!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Son depremler alınırken hata ile karşılaşıldı!",
+                        Toast.LENGTH_SHORT).show();
             }
-
             return earthquakes;
         }).thenAcceptAsync(earthquakes -> {
             double north = Double.NEGATIVE_INFINITY;
             double south = Double.POSITIVE_INFINITY;
             double east = Double.NEGATIVE_INFINITY;
             double west = Double.POSITIVE_INFINITY;
+            map.getOverlays().clear();
 
             for (Earthquake earthquake : earthquakes) {
                 Marker marker = new Marker(map);
-                marker.setPosition(new GeoPoint(earthquake.getLatitude(), earthquake.getLongitude()));
+                marker.setPosition(new GeoPoint(earthquake.getLatitude(),
+                        earthquake.getLongitude()));
                 marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
                 marker.setTitle(earthquake.getLocation());
                 marker.setSubDescription(earthquake.toString());
@@ -106,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
             map.zoomToBoundingBox(boundingBox, true);
 
             this.earthquakes = earthquakes;
-            Toast.makeText(this, "Son depremler alındı!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Son depremler güncellendi!", Toast.LENGTH_SHORT).show();
         }, ContextCompat.getMainExecutor(this));
     }
 }
